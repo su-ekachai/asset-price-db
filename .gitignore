@@ -1,0 +1,30 @@
+.worktrees/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Secrets & config
+.env
+config.yaml
+symbols.yaml
+*.pem
+*.key
+*.secret
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

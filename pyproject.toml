@@ -1,0 +1,52 @@
+[project]
+name = "ohlcv-data-store"
+version = "0.1.0"
+description = "OHLCV market data store using QuestDB"
+requires-python = ">=3.12"
+dependencies = [
+    "questdb>=4.1.0",
+    "psycopg[binary]>=3.3.3",
+    "pandas>=3.0.0",
+    "ccxt>=4.5.50",
+    "yfinance>=0.2.40",
+    "typer>=0.15",
+    "loguru>=0.7",
+    "pyyaml>=6.0",
+    "pyarrow>=24.0.0",
+    "tqdm>=4.66.0",
+]
+
+[project.scripts]
+ohlcv = "src.cli.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "ty>=0.0.32",
+    "ruff>=0.15.0",
+    "pre-commit>=4.0.0",
+]
+
+[tool.ty]
+[tool.ty.rules]
+invalid-parameter-default = "ignore"  # Typer uses `...` (Ellipsis) as required marker
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

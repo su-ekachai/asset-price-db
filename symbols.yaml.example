@@ -1,0 +1,20 @@
+symbols:
+  - symbol: BTC/USDT
+    exchange: binance
+    timeframe: 1m
+    lookback: 30d
+
+  - symbol: ETH/USDT
+    exchange: binance
+    timeframe: 5m
+    lookback: 14d
+
+  - symbol: AAPL
+    exchange: yahoo
+    timeframe: 1d
+    lookback: 2y
+
+  - symbol: MSFT
+    exchange: yahoo
+    timeframe: 1d
+    lookback: 5y
