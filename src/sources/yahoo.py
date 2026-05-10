@@ -7,6 +7,7 @@ from loguru import logger
 
 from src.exceptions import DownloadError
 from src.sources.base import DataSource
+from src.utils import retry
 
 YAHOO_TIMEFRAMES = ["1d", "1wk", "1mo"]
 
@@ -30,6 +31,19 @@ class YahooSource(DataSource):
         """Return True if the symbol is alphanumeric without slashes."""
         return "/" not in symbol and symbol.isalnum()
 
+    @retry(max_attempts=3, delay=2.0, backoff=2.0, exceptions=(ConnectionError, OSError))
+    def _fetch_yfinance(self, symbol: str, start: str, end: str, interval: str) -> pd.DataFrame:
+        """Fetch data from yfinance with retry logic for network errors."""
+        df = yf.download(
+            symbol,
+            start=start,
+            end=end,
+            interval=interval,
+            progress=False,
+            auto_adjust=True,
+        )
+        return df
+
     @override
     def download(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame:
         """Fetch OHLCV data from Yahoo Finance for the given symbol and date range."""
@@ -50,15 +64,13 @@ class YahooSource(DataSource):
         )
 
         try:
-            df = yf.download(
+            df = self._fetch_yfinance(
                 symbol,
                 start=start.strftime("%Y-%m-%d"),
                 end=end.strftime("%Y-%m-%d"),
                 interval=interval,
-                progress=False,
-                auto_adjust=True,
             )
-        except (ValueError, KeyError, ConnectionError) as e:
+        except (ValueError, KeyError, ConnectionError, OSError) as e:
             raise DownloadError(f"Yahoo Finance download failed for {symbol}: {e}") from e
 
         if df is None or df.empty:

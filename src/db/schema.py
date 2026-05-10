@@ -1,4 +1,7 @@
+import contextlib
+
 from src.db.connection import QuestDBReader
+from src.exceptions import DatabaseError
 
 
 def init_db(reader: QuestDBReader) -> None:
@@ -40,3 +43,11 @@ def init_db(reader: QuestDBReader) -> None:
             description STRING
         ) timestamp(timestamp) PARTITION BY YEAR WAL;
     """)
+
+    for ddl in [
+        "ALTER TABLE ohlcv DEDUP UPSERT KEYS(timestamp, symbol, exchange, timeframe);",
+        "ALTER TABLE download_log DEDUP UPSERT KEYS(timestamp, symbol, exchange, timeframe);",
+        "ALTER TABLE assets DEDUP UPSERT KEYS(timestamp, symbol, exchange);",
+    ]:
+        with contextlib.suppress(DatabaseError):
+            reader.execute_ddl(ddl)

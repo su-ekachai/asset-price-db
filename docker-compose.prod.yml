@@ -1,0 +1,55 @@
+services:
+  questdb:
+    image: questdb/questdb:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"  # ILP ingestion
+      - "127.0.0.1:8812:8812"  # PostgreSQL wire
+      - "127.0.0.1:9009:9009"  # Web console
+    environment:
+      - QDB_TELEMETRY_ENABLED=false
+    volumes:
+      - questdb-data:/var/lib/questdb
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      questdb:
+        condition: service_healthy
+    env_file: .env
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "main.py", "check", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    env_file: .env
+    mem_limit: 512m
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Scheduler starting - sync interval: $${SYNC_INTERVAL:-300}s"
+        while true; do
+          echo "$(date -Iseconds) Running sync..."
+          uv run python main.py sync --quiet
+          sleep $${SYNC_INTERVAL:-300}
+        done
+
+volumes:
+  questdb-data:

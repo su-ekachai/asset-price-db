@@ -73,7 +73,7 @@ class QuestDBReader:
         self._conn_str = (
             f"user={config.user} password={config.password} "
             f"host={config.host} port={config.pg_port} dbname=qdb "
-            f"sslmode={sslmode}"
+            f"sslmode={sslmode} connect_timeout=10"
         )
         self._conn: psycopg.Connection[Any] | None = None
 
@@ -83,6 +83,9 @@ class QuestDBReader:
             logger.debug("Establishing PostgreSQL connection to {}:{}", self._host, self._port)
             try:
                 self._conn = psycopg.connect(self._conn_str, autocommit=True)
+                # Set statement timeout to 30 seconds
+                with self._conn.cursor() as cur:
+                    cur.execute(cast(bytes, "SET statement_timeout TO '30000'"))
             except psycopg.Error as e:
                 raise DatabaseError(
                     f"Cannot connect to QuestDB at {self._host}:{self._port}: {e}"

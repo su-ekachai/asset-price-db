@@ -1,3 +1,4 @@
+import random
 import time
 from datetime import datetime
 from typing import Any, override
@@ -63,15 +64,17 @@ class CcxtSource(DataSource):
 
             except ccxt.RateLimitExceeded as e:
                 consecutive_failures += 1
+                jitter = random.uniform(0.5, 1.5)
+                wait = self._rate_limit_pause * jitter
                 logger.warning(
-                    "Rate limited on {}: {}. Pausing {}s (attempt {}/{})",
+                    "Rate limited on {}: {}. Pausing {:.1f}s (attempt {}/{})",
                     self._exchange_name,
                     e,
-                    self._rate_limit_pause,
+                    wait,
                     consecutive_failures,
                     max_retries,
                 )
-                time.sleep(self._rate_limit_pause)
+                time.sleep(wait)
                 if consecutive_failures >= max_retries:
                     raise RateLimitError(f"Rate limit exceeded after {max_retries} retries") from e
 
@@ -79,7 +82,11 @@ class CcxtSource(DataSource):
                 consecutive_failures += 1
                 if consecutive_failures >= max_retries:
                     raise NetworkError(f"Network error after {max_retries} retries: {e}") from e
-                wait = self._rate_limit_pause * (2 ** (consecutive_failures - 1))
+                wait = (
+                    self._rate_limit_pause
+                    * (2 ** (consecutive_failures - 1))
+                    * random.uniform(0.5, 1.5)
+                )
                 logger.warning(
                     "Network error on {} (attempt {}/{}): {}. Retrying in {:.1f}s",
                     self._exchange_name,

@@ -1,7 +1,10 @@
+import signal
 import traceback
+from types import FrameType
 from typing import Annotated
 
 import typer
+from loguru import logger
 from rich.console import Console
 
 from src.cli.commands.check import check_app
@@ -68,7 +71,21 @@ app.command(rich_help_panel="Commands")(status)
 app.command(rich_help_panel="Commands")(sync)
 
 
+def _handle_sigterm(_signum: int, _frame: FrameType | None) -> None:
+    logger.info("Received SIGTERM, shutting down...")
+    raise SystemExit(143)
+
+
+def _handle_sigint(_signum: int, _frame: FrameType | None) -> None:
+    logger.info("Received SIGINT, shutting down...")
+    raise SystemExit(130)
+
+
 def main() -> None:
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+    signal.signal(signal.SIGINT, _handle_sigint)
+
     try:
         app()
     except SystemExit:

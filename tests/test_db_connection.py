@@ -141,8 +141,16 @@ def test_query_failure_raises_database_error(mocker):
     mock_psycopg = mocker.patch("src.db.connection.psycopg")
     mock_conn = MagicMock()
     mock_conn.closed = False
+
+    call_count = {"n": 0}
+
+    def execute_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] > 1:
+            raise psycopg.ProgrammingError("syntax error")
+
     mock_cursor = MagicMock()
-    mock_cursor.execute.side_effect = psycopg.ProgrammingError("syntax error")
+    mock_cursor.execute.side_effect = execute_side_effect
     mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
     mock_psycopg.connect.return_value = mock_conn
@@ -159,8 +167,16 @@ def test_ddl_failure_raises_database_error(mocker):
     mock_psycopg = mocker.patch("src.db.connection.psycopg")
     mock_conn = MagicMock()
     mock_conn.closed = False
+
+    call_count = {"n": 0}
+
+    def execute_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] > 1:
+            raise psycopg.ProgrammingError("table already exists")
+
     mock_cursor = MagicMock()
-    mock_cursor.execute.side_effect = psycopg.ProgrammingError("table already exists")
+    mock_cursor.execute.side_effect = execute_side_effect
     mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
     mock_psycopg.connect.return_value = mock_conn
@@ -299,8 +315,16 @@ def test_reader_query_df_error(mocker):
     mock_psycopg = mocker.patch("src.db.connection.psycopg")
     mock_conn = MagicMock()
     mock_conn.closed = False
+
+    call_count = {"n": 0}
+
+    def execute_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] > 1:
+            raise psycopg.ProgrammingError("bad sql")
+
     mock_cursor = MagicMock()
-    mock_cursor.execute.side_effect = psycopg.ProgrammingError("bad sql")
+    mock_cursor.execute.side_effect = execute_side_effect
     mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
     mock_psycopg.connect.return_value = mock_conn

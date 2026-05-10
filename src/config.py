@@ -54,11 +54,39 @@ def _apply_env_overrides(config: AppConfig) -> AppConfig:
     return config
 
 
+def _validate_for_production(config: AppConfig) -> None:
+    """Warn about insecure configurations when connecting to non-local hosts."""
+    db = config.database
+    is_local = db.host in ("localhost", "127.0.0.1")
+
+    if not is_local:
+        # Check for default credentials
+        if db.user == "admin" and db.password == "quest":
+            logger.warning(
+                "Using default credentials (admin/quest) for non-local host '{}'. "
+                "This is insecure for production environments. "
+                "Set QUESTDB_USER and QUESTDB_PASSWORD environment variables.",
+                db.host,
+            )
+
+        # Check for unencrypted connections
+        ilp_tls_enabled = os.environ.get("QUESTDB_ILP_TLS")
+        sslmode = os.environ.get("QUESTDB_SSLMODE", "disable")
+
+        if not ilp_tls_enabled and sslmode == "disable":
+            logger.warning(
+                "Unencrypted connection to non-local host '{}'. "
+                "Set QUESTDB_ILP_TLS=1 and QUESTDB_SSLMODE=require for production.",
+                db.host,
+            )
+
+
 def load_config(path: str | pathlib.Path = "config.yaml") -> AppConfig:
     """Load configuration with precedence: environment variables > YAML > defaults."""
     file_path = pathlib.Path(path)
     if not file_path.exists():
         config = _apply_env_overrides(AppConfig())
+        _validate_for_production(config)
         logger.debug(
             "Configuration loaded: host={}, ilp_port={}, pg_port={}",
             config.database.host,
@@ -80,6 +108,7 @@ def load_config(path: str | pathlib.Path = "config.yaml") -> AppConfig:
         exchanges=exchanges,
     )
     config = _apply_env_overrides(config)
+    _validate_for_production(config)
     logger.debug(
         "Configuration loaded: host={}, ilp_port={}, pg_port={}",
         config.database.host,

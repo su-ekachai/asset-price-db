@@ -1,11 +1,13 @@
+import fcntl
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from loguru import logger
 
 from src.db.repository import OHLCVRepository
-from src.exceptions import DatabaseError, DownloadError
+from src.exceptions import ConfigurationError, DatabaseError, DownloadError
 from src.sources.base import DataSource
 from src.sources.registry import create_source
 from src.watchlist import WatchlistEntry, parse_lookback_days
@@ -137,27 +139,42 @@ class SyncService:
         dry_run: bool = False,
     ) -> list[SyncResult]:
         """Sync all watchlist entries sequentially and return results per symbol."""
-        results: list[SyncResult] = []
-        for entry in entries:
-            result = self.sync_symbol(entry, dry_run=dry_run)
-            results.append(result)
-            logger.info(
-                "[{}] {} ({}/{}): {} rows in {:.1f}s{}",
-                result.status,
-                entry.symbol,
-                entry.exchange,
-                entry.timeframe,
-                result.rows_inserted,
-                result.duration,
-                f" — {result.message}" if result.message else "",
-            )
+        lock_file_path = Path("/tmp/ohlcv-sync.lock")
+        lock_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        synced = sum(1 for r in results if r.status == "synced")
-        total_rows = sum(r.rows_inserted for r in results)
-        logger.info(
-            "Sync batch complete: {}/{} succeeded, {} rows inserted",
-            synced,
-            len(entries),
-            total_rows,
-        )
-        return results
+        lock_file = lock_file_path.open("w")
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as e:
+            lock_file.close()
+            logger.warning("Another sync process is already running")
+            raise ConfigurationError("Another sync process is already running") from e
+
+        try:
+            results: list[SyncResult] = []
+            for entry in entries:
+                result = self.sync_symbol(entry, dry_run=dry_run)
+                results.append(result)
+                logger.info(
+                    "[{}] {} ({}/{}): {} rows in {:.1f}s{}",
+                    result.status,
+                    entry.symbol,
+                    entry.exchange,
+                    entry.timeframe,
+                    result.rows_inserted,
+                    result.duration,
+                    f" — {result.message}" if result.message else "",
+                )
+
+            synced = sum(1 for r in results if r.status == "synced")
+            total_rows = sum(r.rows_inserted for r in results)
+            logger.info(
+                "Sync batch complete: {}/{} succeeded, {} rows inserted",
+                synced,
+                len(entries),
+                total_rows,
+            )
+            return results
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
