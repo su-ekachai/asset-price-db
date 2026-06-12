@@ -2,7 +2,7 @@ import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 import psycopg
@@ -85,7 +85,7 @@ class QuestDBReader:
                 self._conn = psycopg.connect(self._conn_str, autocommit=True)
                 # Set statement timeout to 30 seconds
                 with self._conn.cursor() as cur:
-                    cur.execute(cast(bytes, "SET statement_timeout TO '30000'"))
+                    cur.execute("SET statement_timeout TO '30000'")
             except psycopg.Error as e:
                 raise DatabaseError(
                     f"Cannot connect to QuestDB at {self._host}:{self._port}: {e}"
@@ -98,12 +98,16 @@ class QuestDBReader:
             self._conn.close()
             self._conn = None
 
+    # psycopg's stubs require LiteralString to discourage SQL injection. Our SQL is
+    # application-built with %s placeholders (values never interpolated), so plain
+    # str is safe here — the ty suppressions below acknowledge that deliberately.
+
     def query(self, sql: str, params: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
         """Execute SQL and return all rows as tuples."""
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
-                cur.execute(cast(bytes, sql), params)
+                cur.execute(sql, params)  # ty: ignore[invalid-argument-type]
                 return cur.fetchall()
         except DatabaseError:
             raise
@@ -115,7 +119,7 @@ class QuestDBReader:
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
-                cur.execute(cast(bytes, sql), params)
+                cur.execute(sql, params)  # ty: ignore[invalid-argument-type]
                 columns = [desc[0] for desc in cur.description] if cur.description else []
                 return pd.DataFrame(cur.fetchall(), columns=columns)
         except DatabaseError:
@@ -128,7 +132,7 @@ class QuestDBReader:
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
-                cur.execute(cast(bytes, sql))
+                cur.execute(sql)  # ty: ignore[no-matching-overload]
         except DatabaseError:
             raise
         except psycopg.Error as e:

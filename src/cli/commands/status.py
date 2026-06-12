@@ -5,9 +5,7 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from src.cli.state import state
-from src.db.connection import QuestDBReader, QuestDBWriter
-from src.db.repository import OHLCVRepository
+from src.cli.deps import open_repo
 from src.exceptions import ConfigurationError, DatabaseError
 from src.services.integrity import TIMEFRAME_MINUTES
 from src.watchlist import load_watchlist
@@ -18,11 +16,8 @@ console = Console()
 def status() -> None:
     """Show overview of all stored data."""
     logger.info("Loading data store status")
-    reader = QuestDBReader(state.cfg.database)
-    try:
+    with open_repo() as repo:
         try:
-            writer = QuestDBWriter(state.cfg.database)
-            repo = OHLCVRepository(writer, reader)
             df = repo.get_symbols()
         except DatabaseError as e:
             console.print(f"[bold red]Error:[/bold red] {e}")
@@ -98,8 +93,6 @@ def status() -> None:
         )
 
         _warn_orphaned_data(df)
-    finally:
-        reader.close()
 
 
 def _warn_orphaned_data(df) -> None:

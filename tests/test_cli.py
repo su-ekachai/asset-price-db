@@ -27,9 +27,9 @@ def test_db_init(mock_init, mock_reader, runner):
     mock_init.assert_called_once()
 
 
-@patch("src.cli.commands.download.QuestDBWriter")
-@patch("src.cli.commands.download.QuestDBReader")
-@patch("src.cli.commands.download.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.download.DownloadService")
 @patch("src.cli.commands.download.create_source")
 def test_download_command(
@@ -76,9 +76,9 @@ def test_download_invalid_timeframe(mock_create_source, runner):
     assert result.exit_code != 0
 
 
-@patch("src.cli.commands.download.QuestDBWriter")
-@patch("src.cli.commands.download.QuestDBReader")
-@patch("src.cli.commands.download.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.download.DownloadService")
 @patch("src.cli.commands.download.create_source")
 def test_download_start_after_end(
@@ -96,9 +96,9 @@ def test_download_start_after_end(
     assert "before end" in result.output
 
 
-@patch("src.cli.commands.download.QuestDBWriter")
-@patch("src.cli.commands.download.QuestDBReader")
-@patch("src.cli.commands.download.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.download.DownloadService")
 @patch("src.cli.commands.download.create_source")
 def test_download_multiple_symbols(
@@ -117,3 +117,30 @@ def test_download_multiple_symbols(
 
     assert result.exit_code == 0
     assert mock_service.download.call_count == 2
+
+
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
+@patch("src.cli.commands.download.DownloadService")
+@patch("src.cli.commands.download.create_source")
+def test_download_partial_failure_exits_1(
+    mock_create_source, mock_service_cls, mock_repo, mock_reader, mock_writer, runner
+):
+    """A multi-symbol download where any symbol fails must exit non-zero for cron."""
+    from src.exceptions import DownloadError
+
+    mock_source = MagicMock()
+    mock_source.supported_timeframes.return_value = ["1m", "5m", "1h", "1d"]
+    mock_source.validate_symbol.return_value = True
+    mock_create_source.return_value = mock_source
+
+    mock_service = MagicMock()
+    mock_service.download.side_effect = [100, DownloadError("exchange unavailable")]
+    mock_service_cls.return_value = mock_service
+
+    result = runner.invoke(app, ["download", "BTC/USDT", "ETH/USDT", "--start", "2023-01-01"])
+
+    assert result.exit_code == 1
+    assert mock_service.download.call_count == 2
+    assert "ETH/USDT" in result.output

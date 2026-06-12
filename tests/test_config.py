@@ -1,4 +1,7 @@
+import pytest
+
 from src.config import AppConfig, load_config
+from src.exceptions import ConfigurationError
 
 
 def test_load_config(tmp_path):
@@ -15,16 +18,12 @@ download:
   default_timeframe: 1d
   chunk_size: 500
   rate_limit_pause: 1.0
-exchanges:
-  binance:
-    enabled: false
     """)
     config = load_config(str(config_file))
     assert isinstance(config, AppConfig)
     assert config.database.host == "testhost"
     assert config.database.ilp_port == 9001
     assert config.download.default_exchange == "yahoo"
-    assert config.exchanges["binance"]["enabled"] is False
 
 
 def test_load_config_missing_file():
@@ -62,3 +61,15 @@ database:
     assert config.database.host == "envhost"
     assert config.database.user == "yamluser"
     assert config.database.password == "envpass"
+
+
+def test_env_port_not_an_integer(monkeypatch):
+    monkeypatch.setenv("QUESTDB_PG_PORT", "eighty-eight-twelve")
+    with pytest.raises(ConfigurationError, match="QUESTDB_PG_PORT must be an integer"):
+        load_config("non_existent_config.yaml")
+
+
+def test_env_port_out_of_range(monkeypatch):
+    monkeypatch.setenv("QUESTDB_ILP_PORT", "70000")
+    with pytest.raises(ConfigurationError, match="between 1 and 65535"):
+        load_config("non_existent_config.yaml")

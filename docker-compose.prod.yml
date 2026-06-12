@@ -3,9 +3,9 @@ services:
     image: questdb/questdb:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9000:9000"  # ILP ingestion
+      - "127.0.0.1:9000:9000"  # HTTP: REST API, web console, ILP-over-HTTP ingestion
       - "127.0.0.1:8812:8812"  # PostgreSQL wire
-      - "127.0.0.1:9009:9009"  # Web console
+      - "127.0.0.1:9009:9009"  # ILP over TCP
     environment:
       - QDB_TELEMETRY_ENABLED=false
     volumes:
@@ -18,26 +18,11 @@ services:
       retries: 3
       start_period: 10s
 
-  app:
-    build: .
-    restart: unless-stopped
-    depends_on:
-      questdb:
-        condition: service_healthy
-    env_file: .env
-    mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "uv", "run", "python", "main.py", "check", "health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
   scheduler:
     build: .
     restart: unless-stopped
     depends_on:
-      app:
+      questdb:
         condition: service_healthy
     env_file: .env
     mem_limit: 512m
@@ -47,7 +32,7 @@ services:
         echo "Scheduler starting - sync interval: $${SYNC_INTERVAL:-300}s"
         while true; do
           echo "$(date -Iseconds) Running sync..."
-          uv run python main.py sync --quiet
+          uv run python main.py sync --quiet || echo "$(date -Iseconds) sync FAILED rc=$?"
           sleep $${SYNC_INTERVAL:-300}
         done
 

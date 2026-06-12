@@ -36,6 +36,7 @@ src/
 ├── cli/
 │   ├── main.py                 → Typer app, callback, command assembly
 │   ├── state.py                → Module-level State dataclass (config + logging)
+│   ├── deps.py                 → open_repo() context manager (shared reader/writer/repo setup)
 │   └── commands/
 │       ├── check.py            → `check gaps|anomalies|health` commands
 │       ├── db.py               → `db init` command
@@ -93,7 +94,10 @@ Fields: `symbol` (required), `exchange` (required), `timeframe` (required), `loo
 - All dataclasses use `kw_only=True`
 - Favor straightforward procedural logic over complex inheritance
 - UTC timestamps everywhere; strip tz before QuestDB ILP insert via `dt.tz_localize(None).dt.as_unit('us')`
-- No bare `except Exception` — use specific exception types from `src/exceptions.py`
+- No bare `except Exception` outside process boundaries — use specific exception types from
+  `src/exceptions.py`. Allowed boundaries: the CLI top-level handler (`cli/main.py`) and
+  per-symbol isolation in `SyncService.sync_symbol` (one bad symbol must not abort the batch);
+  both must log the full exception
 - Retry with exponential backoff for external API calls (see `src/utils.py`)
 - Keep dependency footprint minimal — prefer stdlib over new packages
 
@@ -126,7 +130,7 @@ Fields: `symbol` (required), `exchange` (required), `timeframe` (required), `loo
 - Mock all external services (QuestDB, ccxt exchange APIs, yfinance)
 - 80% coverage minimum enforced via `pytest-cov`
 - Run `uv run pytest` — includes coverage report
-- 107 tests, 90%+ coverage
+- 183 tests, 96%+ coverage
 
 ## Adding a New Exchange
 1. Create `src/sources/<exchange>.py` implementing `DataSource` ABC
@@ -145,5 +149,9 @@ Fields: `symbol` (required), `exchange` (required), `timeframe` (required), `loo
 - ccxt library for unified exchange API abstraction
 - No async — sequential downloads, single-threaded (acceptable for batch workload)
 - Batch ILP connections for performance (single connection per download operation)
-- Cron-friendly sync: proper exit codes, quiet mode, watchlist-driven
+- Cron-friendly sync: proper exit codes, quiet mode, watchlist-driven, exclusive lock
+  (`sync_all`) so overlapping runs cannot interleave
+- Sync resumes AT the last stored timestamp (not after it): the previous run's final candle
+  may have been still-forming, so it is refetched and DEDUP-overwritten with final values
 - Per-symbol timeframe support via symbols.yaml (crypto 1m, stocks 1d)
+- Yahoo symbols may contain `. ^ = -` (e.g. BRK-B, ^GSPC, EURUSD=X, GC=F, 7203.T)

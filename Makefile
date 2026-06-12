@@ -28,14 +28,14 @@ up: ## Start production stack
 down: ## Stop production stack
 	docker compose -f docker-compose.prod.yml down
 
-logs: ## Tail app logs
-	docker compose -f docker-compose.prod.yml logs -f app scheduler
+logs: ## Tail scheduler logs
+	docker compose -f docker-compose.prod.yml logs -f scheduler
 
 health: ## Check system health
-	docker compose -f docker-compose.prod.yml exec app uv run python main.py check health
+	docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py check health
 
 sync: ## Run manual sync
-	docker compose -f docker-compose.prod.yml exec app uv run python main.py sync
+	docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py sync
 
 status: ## Show data status
-	docker compose -f docker-compose.prod.yml exec app uv run python main.py status
+	docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py status
