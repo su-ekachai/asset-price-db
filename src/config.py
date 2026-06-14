@@ -1,12 +1,11 @@
 import os
 import pathlib
 from dataclasses import dataclass, field
-from typing import Any
 
 import yaml
 from loguru import logger
 
-type JSONDict = dict[str, Any]
+from src.exceptions import ConfigurationError
 
 
 @dataclass(kw_only=True)
@@ -36,17 +35,30 @@ class AppConfig:
 
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
-    exchanges: JSONDict = field(default_factory=dict)
+
+
+def _env_port(name: str) -> int | None:
+    """Read a port number from the environment, validating type and range."""
+    val = os.environ.get(name)
+    if not val:
+        return None
+    try:
+        port = int(val)
+    except ValueError:
+        raise ConfigurationError(f"{name} must be an integer, got '{val}'") from None
+    if not 1 <= port <= 65535:
+        raise ConfigurationError(f"{name} must be between 1 and 65535, got {port}")
+    return port
 
 
 def _apply_env_overrides(config: AppConfig) -> AppConfig:
     """Apply environment variable overrides (highest priority)."""
     if val := os.environ.get("QUESTDB_HOST"):
         config.database.host = val
-    if val := os.environ.get("QUESTDB_ILP_PORT"):
-        config.database.ilp_port = int(val)
-    if val := os.environ.get("QUESTDB_PG_PORT"):
-        config.database.pg_port = int(val)
+    if port := _env_port("QUESTDB_ILP_PORT"):
+        config.database.ilp_port = port
+    if port := _env_port("QUESTDB_PG_PORT"):
+        config.database.pg_port = port
     if val := os.environ.get("QUESTDB_USER"):
         config.database.user = val
     if val := os.environ.get("QUESTDB_PASSWORD"):
@@ -84,29 +96,16 @@ def _validate_for_production(config: AppConfig) -> None:
 def load_config(path: str | pathlib.Path = "config.yaml") -> AppConfig:
     """Load configuration with precedence: environment variables > YAML > defaults."""
     file_path = pathlib.Path(path)
-    if not file_path.exists():
-        config = _apply_env_overrides(AppConfig())
-        _validate_for_production(config)
-        logger.debug(
-            "Configuration loaded: host={}, ilp_port={}, pg_port={}",
-            config.database.host,
-            config.database.ilp_port,
-            config.database.pg_port,
+    if file_path.exists():
+        with file_path.open("r") as f:
+            data = yaml.safe_load(f) or {}
+        config = AppConfig(
+            database=DatabaseConfig(**data.get("database", {})),
+            download=DownloadConfig(**data.get("download", {})),
         )
-        return config
+    else:
+        config = AppConfig()
 
-    with file_path.open("r") as f:
-        data = yaml.safe_load(f) or {}
-
-    db_data = data.get("database", {})
-    dl_data = data.get("download", {})
-    exchanges = data.get("exchanges", {})
-
-    config = AppConfig(
-        database=DatabaseConfig(**db_data),
-        download=DownloadConfig(**dl_data),
-        exchanges=exchanges,
-    )
     config = _apply_env_overrides(config)
     _validate_for_production(config)
     logger.debug(

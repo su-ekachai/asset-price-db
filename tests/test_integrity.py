@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
+from src.exceptions import DatabaseError
 from src.services.integrity import IntegrityService
 
 
@@ -137,7 +138,7 @@ def test_find_anomalies_empty_data():
 
 def test_check_health_connected():
     mock_repo = MagicMock()
-    mock_repo._reader.query.return_value = [(1000,)]
+    mock_repo.count_candles.return_value = 1000
     mock_repo.get_symbols.return_value = pd.DataFrame({"symbol": ["BTC/USDT", "ETH/USDT"]})
 
     service = IntegrityService(mock_repo)
@@ -151,7 +152,7 @@ def test_check_health_connected():
 
 def test_check_health_not_connected():
     mock_repo = MagicMock()
-    mock_repo._reader.query.side_effect = Exception("connection refused")
+    mock_repo.count_candles.side_effect = DatabaseError("connection refused")
 
     service = IntegrityService(mock_repo)
     report = service.check_health()
@@ -203,8 +204,8 @@ def test_find_anomalies_duplicates():
 
 def test_check_health_symbol_query_fails():
     mock_repo = MagicMock()
-    mock_repo._reader.query.return_value = [(500,)]
-    mock_repo.get_symbols.side_effect = Exception("symbol query failed")
+    mock_repo.count_candles.return_value = 500
+    mock_repo.get_symbols.side_effect = DatabaseError("symbol query failed")
 
     service = IntegrityService(mock_repo)
     report = service.check_health()

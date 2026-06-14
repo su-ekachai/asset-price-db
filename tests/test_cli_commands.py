@@ -18,9 +18,9 @@ def _runner():
 # --- Sync command tests ---
 
 
-@patch("src.cli.commands.sync.QuestDBWriter")
-@patch("src.cli.commands.sync.QuestDBReader")
-@patch("src.cli.commands.sync.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.sync.SyncService")
 @patch("src.cli.commands.sync.load_watchlist")
 def test_sync_command(mock_load, mock_service_cls, mock_repo, mock_reader, mock_writer):
@@ -32,14 +32,16 @@ def test_sync_command(mock_load, mock_service_cls, mock_repo, mock_reader, mock_
     )
 
     mock_service = MagicMock()
-    mock_service.sync_symbol.return_value = SyncResult(
-        symbol="BTC/USDT",
-        exchange="binance",
-        timeframe="1m",
-        rows_inserted=100,
-        status="synced",
-        duration=1.5,
-    )
+    mock_service.sync_all.return_value = [
+        SyncResult(
+            symbol="BTC/USDT",
+            exchange="binance",
+            timeframe="1m",
+            rows_inserted=100,
+            status="synced",
+            duration=1.5,
+        )
+    ]
     mock_service_cls.return_value = mock_service
 
     result = _runner().invoke(app, ["sync", "--watchlist", "symbols.yaml"])
@@ -47,9 +49,9 @@ def test_sync_command(mock_load, mock_service_cls, mock_repo, mock_reader, mock_
     assert "synced" in result.output
 
 
-@patch("src.cli.commands.sync.QuestDBWriter")
-@patch("src.cli.commands.sync.QuestDBReader")
-@patch("src.cli.commands.sync.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.sync.SyncService")
 @patch("src.cli.commands.sync.load_watchlist")
 def test_sync_dry_run(mock_load, mock_service_cls, mock_repo, mock_reader, mock_writer):
@@ -61,15 +63,17 @@ def test_sync_dry_run(mock_load, mock_service_cls, mock_repo, mock_reader, mock_
     )
 
     mock_service = MagicMock()
-    mock_service.sync_symbol.return_value = SyncResult(
-        symbol="BTC/USDT",
-        exchange="binance",
-        timeframe="1m",
-        rows_inserted=0,
-        status="dry_run",
-        duration=0.1,
-        message="Would download from 2024-01-01 to now",
-    )
+    mock_service.sync_all.return_value = [
+        SyncResult(
+            symbol="BTC/USDT",
+            exchange="binance",
+            timeframe="1m",
+            rows_inserted=0,
+            status="dry_run",
+            duration=0.1,
+            message="Would download from 2024-01-01 to now",
+        )
+    ]
     mock_service_cls.return_value = mock_service
 
     result = _runner().invoke(app, ["sync", "--watchlist", "symbols.yaml", "--dry-run"])
@@ -77,9 +81,9 @@ def test_sync_dry_run(mock_load, mock_service_cls, mock_repo, mock_reader, mock_
     assert "dry_run" in result.output
 
 
-@patch("src.cli.commands.sync.QuestDBWriter")
-@patch("src.cli.commands.sync.QuestDBReader")
-@patch("src.cli.commands.sync.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.sync.SyncService")
 @patch("src.cli.commands.sync.load_watchlist")
 def test_sync_with_failures_exits_1(
@@ -93,15 +97,17 @@ def test_sync_with_failures_exits_1(
     )
 
     mock_service = MagicMock()
-    mock_service.sync_symbol.return_value = SyncResult(
-        symbol="BTC/USDT",
-        exchange="binance",
-        timeframe="1m",
-        rows_inserted=0,
-        status="failed",
-        duration=0.5,
-        message="connection error",
-    )
+    mock_service.sync_all.return_value = [
+        SyncResult(
+            symbol="BTC/USDT",
+            exchange="binance",
+            timeframe="1m",
+            rows_inserted=0,
+            status="failed",
+            duration=0.5,
+            message="connection error",
+        )
+    ]
     mock_service_cls.return_value = mock_service
 
     result = _runner().invoke(app, ["sync", "--watchlist", "symbols.yaml"])
@@ -135,9 +141,9 @@ def test_sync_symbol_not_in_watchlist(mock_load):
 # --- Query command tests ---
 
 
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_list_mode(mock_repo_cls, mock_reader, mock_writer):
     mock_repo = MagicMock()
     mock_repo.get_symbols.return_value = pd.DataFrame(
@@ -156,9 +162,9 @@ def test_query_list_mode(mock_repo_cls, mock_reader, mock_writer):
     assert "BTC/USDT" in result.output
 
 
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_list_empty(mock_repo_cls, mock_reader, mock_writer):
     mock_repo = MagicMock()
     mock_repo.get_symbols.return_value = pd.DataFrame()
@@ -170,9 +176,9 @@ def test_query_list_empty(mock_repo_cls, mock_reader, mock_writer):
 
 
 @patch("src.cli.commands.query.export_dataframe")
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_symbol(mock_repo_cls, mock_reader, mock_writer, mock_export):
     mock_repo = MagicMock()
     mock_repo.get_candles.return_value = pd.DataFrame(
@@ -194,9 +200,9 @@ def test_query_symbol(mock_repo_cls, mock_reader, mock_writer, mock_export):
     mock_export.assert_called_once()
 
 
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_no_data(mock_repo_cls, mock_reader, mock_writer):
     mock_repo = MagicMock()
     mock_repo.get_candles.return_value = pd.DataFrame()
@@ -215,9 +221,9 @@ def test_query_no_symbol():
 # --- Check command tests ---
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_gaps_none(mock_service_cls, mock_repo, mock_reader, mock_writer):
     mock_service = MagicMock()
@@ -229,9 +235,9 @@ def test_check_gaps_none(mock_service_cls, mock_repo, mock_reader, mock_writer):
     assert "No gaps" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_gaps_found(mock_service_cls, mock_repo, mock_reader, mock_writer):
     from datetime import datetime
@@ -253,9 +259,9 @@ def test_check_gaps_found(mock_service_cls, mock_repo, mock_reader, mock_writer)
     assert "4" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_anomalies_none(mock_service_cls, mock_repo, mock_reader, mock_writer):
     mock_service = MagicMock()
@@ -267,9 +273,9 @@ def test_check_anomalies_none(mock_service_cls, mock_repo, mock_reader, mock_wri
     assert "No anomalies" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_health_ok(mock_service_cls, mock_repo, mock_reader, mock_writer):
     from src.services.integrity import HealthReport
@@ -285,9 +291,9 @@ def test_check_health_ok(mock_service_cls, mock_repo, mock_reader, mock_writer):
     assert "Connected" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_health_failed(mock_service_cls, mock_repo, mock_reader, mock_writer):
     from src.services.integrity import HealthReport
@@ -305,9 +311,9 @@ def test_check_health_failed(mock_service_cls, mock_repo, mock_reader, mock_writ
 # --- Status command tests ---
 
 
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_with_data(mock_repo_cls, mock_reader, mock_writer):
     from datetime import datetime
 
@@ -332,9 +338,9 @@ def test_status_with_data(mock_repo_cls, mock_reader, mock_writer):
     assert "AAPL" in result.output
 
 
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_empty(mock_repo_cls, mock_reader, mock_writer):
     mock_repo = MagicMock()
     mock_repo.get_symbols.return_value = pd.DataFrame()
@@ -346,9 +352,9 @@ def test_status_empty(mock_repo_cls, mock_reader, mock_writer):
 
 
 @patch("src.cli.commands.status.load_watchlist")
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_orphan_warning(mock_repo_cls, mock_reader, mock_writer, mock_load):
     from datetime import datetime
 
@@ -381,9 +387,9 @@ def test_status_orphan_warning(mock_repo_cls, mock_reader, mock_writer, mock_loa
 
 
 @patch("src.cli.commands.status.load_watchlist")
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_no_orphans(mock_repo_cls, mock_reader, mock_writer, mock_load):
     from datetime import datetime
 
@@ -411,9 +417,9 @@ def test_status_no_orphans(mock_repo_cls, mock_reader, mock_writer, mock_load):
 
 
 @patch("src.cli.commands.status.load_watchlist")
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_no_watchlist_file(mock_repo_cls, mock_reader, mock_writer, mock_load):
     from datetime import datetime
 
@@ -452,9 +458,9 @@ def test_download_invalid_exchange(mock_create):
     assert "Hint" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_gaps_db_error(mock_service_cls, mock_repo, mock_reader, mock_writer):
     mock_service = MagicMock()
@@ -469,9 +475,9 @@ def test_check_gaps_db_error(mock_service_cls, mock_repo, mock_reader, mock_writ
     assert "Hint" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_anomalies_db_error(mock_service_cls, mock_repo, mock_reader, mock_writer):
     mock_service = MagicMock()
@@ -483,9 +489,9 @@ def test_check_anomalies_db_error(mock_service_cls, mock_repo, mock_reader, mock
     assert "Query failed" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_health_db_error(mock_service_cls, mock_repo, mock_reader, mock_writer):
     mock_service = MagicMock()
@@ -499,11 +505,13 @@ def test_check_health_db_error(mock_service_cls, mock_repo, mock_reader, mock_wr
     assert "Not connected" in result.output
 
 
-@patch("src.cli.commands.status.QuestDBWriter")
-@patch("src.cli.commands.status.QuestDBReader")
-@patch("src.cli.commands.status.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_status_db_connection_error(mock_repo_cls, mock_reader, mock_writer):
-    mock_repo_cls.side_effect = DatabaseError("Cannot connect to QuestDB at localhost:8812")
+    mock_repo = MagicMock()
+    mock_repo.get_symbols.side_effect = DatabaseError("Cannot connect to QuestDB at localhost:8812")
+    mock_repo_cls.return_value = mock_repo
 
     result = _runner().invoke(app, ["status"])
     assert result.exit_code == 1
@@ -512,9 +520,9 @@ def test_status_db_connection_error(mock_repo_cls, mock_reader, mock_writer):
 
 
 @patch("src.cli.commands.query.export_dataframe")
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_export_permission_error(mock_repo_cls, mock_reader, mock_writer, mock_export):
     mock_repo = MagicMock()
     mock_repo.get_candles.return_value = pd.DataFrame(
@@ -538,9 +546,9 @@ def test_query_export_permission_error(mock_repo_cls, mock_reader, mock_writer, 
 
 
 @patch("src.cli.commands.query.export_dataframe")
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_export_config_error(mock_repo_cls, mock_reader, mock_writer, mock_export):
     from src.exceptions import ConfigurationError
 
@@ -582,20 +590,22 @@ def test_sync_quiet_mode(mock_load):
     )
 
     with (
-        patch("src.cli.commands.sync.QuestDBWriter"),
-        patch("src.cli.commands.sync.QuestDBReader"),
-        patch("src.cli.commands.sync.OHLCVRepository"),
+        patch("src.cli.deps.QuestDBWriter"),
+        patch("src.cli.deps.QuestDBReader"),
+        patch("src.cli.deps.OHLCVRepository"),
         patch("src.cli.commands.sync.SyncService") as mock_svc_cls,
     ):
         mock_svc = MagicMock()
-        mock_svc.sync_symbol.return_value = SyncResult(
-            symbol="BTC/USDT",
-            exchange="binance",
-            timeframe="1m",
-            rows_inserted=50,
-            status="synced",
-            duration=1.0,
-        )
+        mock_svc.sync_all.return_value = [
+            SyncResult(
+                symbol="BTC/USDT",
+                exchange="binance",
+                timeframe="1m",
+                rows_inserted=50,
+                status="synced",
+                duration=1.0,
+            )
+        ]
         mock_svc_cls.return_value = mock_svc
 
         result = _runner().invoke(app, ["sync", "--watchlist", "symbols.yaml", "--quiet"])
@@ -654,18 +664,18 @@ def test_download_start_after_end(mock_create):
     assert "before end" in result.output
 
 
-@patch("src.cli.commands.query.QuestDBWriter")
-@patch("src.cli.commands.query.QuestDBReader")
-@patch("src.cli.commands.query.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 def test_query_invalid_date_format(mock_repo_cls, mock_reader, mock_writer):
     result = _runner().invoke(app, ["query", "BTC/USDT", "--start", "not-a-date"])
     assert result.exit_code == 1
     assert "YYYY-MM-DD" in result.output
 
 
-@patch("src.cli.commands.check.QuestDBWriter")
-@patch("src.cli.commands.check.QuestDBReader")
-@patch("src.cli.commands.check.OHLCVRepository")
+@patch("src.cli.deps.QuestDBWriter")
+@patch("src.cli.deps.QuestDBReader")
+@patch("src.cli.deps.OHLCVRepository")
 @patch("src.cli.commands.check.IntegrityService")
 def test_check_anomalies_found(mock_service_cls, mock_repo, mock_reader, mock_writer):
     from datetime import datetime

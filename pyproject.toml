@@ -13,7 +13,6 @@ dependencies = [
     "loguru>=0.7",
     "pyyaml>=6.0",
     "pyarrow>=24.0.0",
-    "tqdm>=4.66.0",
 ]
 
 [project.scripts]

@@ -5,6 +5,7 @@ import pandas as pd
 from loguru import logger
 
 from src.db.repository import OHLCVRepository
+from src.exceptions import DatabaseError
 
 TIMEFRAME_MINUTES = {
     "1m": 1,
@@ -74,20 +75,16 @@ class IntegrityService:
         expected_delta = timedelta(minutes=interval_minutes)
         timestamps = pd.to_datetime(df["timestamp"]).sort_values().reset_index(drop=True)
 
-        gaps: list[Gap] = []
-        for i in range(1, len(timestamps)):
-            actual_delta = timestamps[i] - timestamps[i - 1]
-            if actual_delta > expected_delta * 1.5:
-                missing = int(actual_delta / expected_delta) - 1
-                gaps.append(
-                    Gap(
-                        start=timestamps[i - 1].to_pydatetime(),
-                        end=timestamps[i].to_pydatetime(),
-                        missing_candles=missing,
-                    )
-                )
-
-        return gaps
+        deltas = timestamps.diff()
+        gap_indices = deltas.index[deltas > expected_delta * 1.5]
+        return [
+            Gap(
+                start=timestamps[i - 1].to_pydatetime(),
+                end=timestamps[i].to_pydatetime(),
+                missing_candles=int(deltas[i] / expected_delta) - 1,
+            )
+            for i in gap_indices
+        ]
 
     def find_anomalies(self, symbol: str, exchange: str, timeframe: str) -> list[Anomaly]:
         """Detect data quality issues."""
@@ -164,9 +161,8 @@ class IntegrityService:
     def check_health(self) -> HealthReport:
         """Verify QuestDB connectivity, table existence, basic stats."""
         try:
-            result = self._repo._reader.query("SELECT count() FROM ohlcv")
-            total_rows = result[0][0] if result else 0
-        except Exception as e:
+            total_rows = self._repo.count_candles()
+        except DatabaseError as e:
             logger.warning("Health check query failed: {}", e)
             return HealthReport(
                 connected=False,
@@ -177,7 +173,7 @@ class IntegrityService:
         try:
             symbols_df = self._repo.get_symbols()
             symbol_count = len(symbols_df)
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning("Failed to query symbol count: {}", e)
             symbol_count = 0
 

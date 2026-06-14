@@ -7,6 +7,11 @@ from loguru import logger
 
 from src.db.connection import QuestDBReader, QuestDBWriter
 
+# Fixed designated timestamp for the assets table: DEDUP keys are
+# (created_at, symbol, exchange), so re-registrations only upsert (rather than
+# append a new row) when the timestamp is identical across calls.
+_ASSET_REGISTRY_TS = datetime(2000, 1, 1, tzinfo=UTC)
+
 
 class OHLCVRepository:
     """Data access layer for OHLCV candle storage and retrieval."""
@@ -107,6 +112,11 @@ class OHLCVRepository:
 
         return self._reader.query_df(sql, tuple(params))
 
+    def count_candles(self) -> int:
+        """Return the total number of stored candles."""
+        rows = self._reader.query("SELECT count() FROM ohlcv")
+        return int(rows[0][0]) if rows else 0
+
     def get_symbols(self) -> pd.DataFrame:
         """Return all stored symbol/exchange/timeframe combinations with row counts."""
         sql = (
@@ -135,5 +145,5 @@ class OHLCVRepository:
                 "quote_currency": quote_currency or "UNKNOWN",
             },
             columns={"description": description or ""},
-            at=datetime.now(UTC),
+            at=_ASSET_REGISTRY_TS,
         )

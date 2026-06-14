@@ -1,5 +1,6 @@
 import fcntl
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -55,7 +56,10 @@ class SyncService:
             lookback_days = parse_lookback_days(entry.lookback)
             start = now - timedelta(days=lookback_days)
         else:
-            start = last_ts + timedelta(milliseconds=1)
+            # Resume AT the last stored candle, not after it: the previous sync may
+            # have stored a still-forming candle, and DEDUP overwrites it with final
+            # values on refetch. Starting past it would freeze incomplete data forever.
+            start = last_ts
 
         if start >= now:
             return SyncResult(
@@ -137,8 +141,14 @@ class SyncService:
         self,
         entries: list[WatchlistEntry],
         dry_run: bool = False,
+        on_result: Callable[[WatchlistEntry, SyncResult], None] | None = None,
     ) -> list[SyncResult]:
-        """Sync all watchlist entries sequentially and return results per symbol."""
+        """Sync all watchlist entries sequentially and return results per symbol.
+
+        Holds an exclusive lock for the whole batch so overlapping runs (e.g. a cron
+        sync outlasting its interval) cannot interleave. `on_result` is invoked after
+        each symbol completes (used by the CLI for progress display).
+        """
         lock_file_path = Path("/tmp/ohlcv-sync.lock")
         lock_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -155,6 +165,8 @@ class SyncService:
             for entry in entries:
                 result = self.sync_symbol(entry, dry_run=dry_run)
                 results.append(result)
+                if on_result:
+                    on_result(entry, result)
                 logger.info(
                     "[{}] {} ({}/{}): {} rows in {:.1f}s{}",
                     result.status,

@@ -2,9 +2,9 @@ services:
   questdb:
     image: questdb/questdb:latest
     ports:
-      - "9000:9000"
-      - "8812:8812"
-      - "9009:9009"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:8812:8812"
+      - "127.0.0.1:9009:9009"
     environment:
       - QDB_TELEMETRY_ENABLED=false
     volumes:
@@ -12,3 +12,7 @@ services:
 
 volumes:
   questdb-data:
+    # Reuse the original data volume (947M of OHLCV history). A compose volume-key
+    # rename had orphaned it, leaving the stack pointed at a fresh empty volume.
+    name: asset-price-db_questdb_data
+    external: true

@@ -64,8 +64,13 @@ class CcxtSource(DataSource):
 
             except ccxt.RateLimitExceeded as e:
                 consecutive_failures += 1
-                jitter = random.uniform(0.5, 1.5)
-                wait = self._rate_limit_pause * jitter
+                if consecutive_failures >= max_retries:
+                    raise RateLimitError(f"Rate limit exceeded after {max_retries} retries") from e
+                wait = (
+                    self._rate_limit_pause
+                    * (2 ** (consecutive_failures - 1))
+                    * random.uniform(0.5, 1.5)
+                )
                 logger.warning(
                     "Rate limited on {}: {}. Pausing {:.1f}s (attempt {}/{})",
                     self._exchange_name,
@@ -75,8 +80,6 @@ class CcxtSource(DataSource):
                     max_retries,
                 )
                 time.sleep(wait)
-                if consecutive_failures >= max_retries:
-                    raise RateLimitError(f"Rate limit exceeded after {max_retries} retries") from e
 
             except ccxt.NetworkError as e:
                 consecutive_failures += 1

@@ -14,8 +14,11 @@ build/
 htmlcov/
 .pytest_cache/
 
-# Secrets & config
+# Secrets & config (keep *.example templates tracked)
 .env
+.env.*
+!.env.example
+!.env.production.example
 config.yaml
 symbols.yaml
 *.pem

@@ -16,7 +16,8 @@ class State:
 
     @property
     def cfg(self) -> AppConfig:
-        assert self.config is not None
+        if self.config is None:
+            raise RuntimeError("CLI state not initialized: init_state() must run first")
         return self.config
 
 

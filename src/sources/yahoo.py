@@ -1,9 +1,11 @@
+import re
 from datetime import datetime
 from typing import Any, override
 
 import pandas as pd
 import yfinance as yf
 from loguru import logger
+from yfinance.exceptions import YFException, YFPricesMissingError, YFRateLimitError
 
 from src.exceptions import DownloadError
 from src.sources.base import DataSource
@@ -17,6 +19,10 @@ YFINANCE_INTERVAL_MAP = {
     "1mo": "1mo",
 }
 
+# Yahoo symbols: stocks (AAPL), class shares (BRK-B), indices (^GSPC),
+# forex/futures (EURUSD=X, GC=F), crypto (BTC-USD), foreign listings (7203.T)
+_SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9.^=\-]+$")
+
 
 class YahooSource(DataSource):
     """Data source for traditional markets (stocks, forex, commodities) via yfinance."""
@@ -28,21 +34,29 @@ class YahooSource(DataSource):
 
     @override
     def validate_symbol(self, symbol: str) -> bool:
-        """Return True if the symbol is alphanumeric without slashes."""
-        return "/" not in symbol and symbol.isalnum()
+        """Return True if the symbol matches Yahoo Finance symbol syntax."""
+        return bool(_SYMBOL_PATTERN.match(symbol))
 
-    @retry(max_attempts=3, delay=2.0, backoff=2.0, exceptions=(ConnectionError, OSError))
+    @retry(
+        max_attempts=3,
+        delay=2.0,
+        backoff=2.0,
+        exceptions=(ConnectionError, OSError, YFRateLimitError),
+    )
     def _fetch_yfinance(self, symbol: str, start: str, end: str, interval: str) -> pd.DataFrame:
-        """Fetch data from yfinance with retry logic for network errors."""
-        df = yf.download(
-            symbol,
-            start=start,
-            end=end,
-            interval=interval,
-            progress=False,
-            auto_adjust=True,
-        )
-        return df
+        """Fetch data from yfinance, raising on failure instead of returning empty data."""
+        try:
+            return yf.Ticker(symbol).history(
+                start=start,
+                end=end,
+                interval=interval,
+                auto_adjust=True,
+                actions=False,
+                raise_errors=True,
+            )
+        except YFPricesMissingError:
+            # Valid request with no rows (e.g. weekend/holiday range) — not an error.
+            return pd.DataFrame()
 
     @override
     def download(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame:
@@ -70,11 +84,18 @@ class YahooSource(DataSource):
                 end=end.strftime("%Y-%m-%d"),
                 interval=interval,
             )
-        except (ValueError, KeyError, ConnectionError, OSError) as e:
+        except YFException as e:
+            raise DownloadError(f"Yahoo Finance download failed for {symbol}: {e}") from e
+        except (ConnectionError, OSError) as e:
             raise DownloadError(f"Yahoo Finance download failed for {symbol}: {e}") from e
 
         if df is None or df.empty:
             return pd.DataFrame()
+
+        # yf.download-style frames carry a (field, ticker) MultiIndex — flatten so the
+        # rename below works regardless of which yfinance API produced the frame.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
 
         df = df.reset_index()
 
@@ -111,7 +132,7 @@ class YahooSource(DataSource):
                 "quote_currency": info.get("currency", "USD"),
                 "description": info.get("longName", f"{symbol} on Yahoo Finance"),
             }
-        except (ValueError, KeyError, AttributeError) as e:
+        except (ValueError, KeyError, AttributeError, OSError, YFException) as e:
             logger.warning("Failed to fetch Yahoo metadata for {}: {}", symbol, e)
             return {
                 "asset_type": "equity",

@@ -5,9 +5,7 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from src.cli.state import state
-from src.db.connection import QuestDBReader, QuestDBWriter
-from src.db.repository import OHLCVRepository
+from src.cli.deps import open_repo
 from src.exceptions import DatabaseError
 from src.services.integrity import IntegrityService
 
@@ -33,10 +31,7 @@ def gaps(
         ohlcv check gaps BTC/USDT -e binance -t 1m
     """
     logger.info("Checking gaps for {} ({}/{})", symbol, exchange, timeframe)
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        writer = QuestDBWriter(state.cfg.database)
-        repo = OHLCVRepository(writer, reader)
+    with open_repo() as repo:
         service = IntegrityService(repo)
 
         try:
@@ -62,9 +57,12 @@ def gaps(
         out.print(table)
         total_missing = sum(g.missing_candles for g in gaps_found)
         out.print(f"\nTotal: {len(gaps_found)} gaps, {total_missing} missing candles")
+        if timeframe in ("1d", "1wk", "1mo"):
+            out.print(
+                "[dim]Note: for market-hours assets (stocks/forex), weekend and "
+                "holiday gaps are expected and not data errors.[/dim]"
+            )
         logger.info("Found {} gaps ({} missing candles)", len(gaps_found), total_missing)
-    finally:
-        reader.close()
 
 
 @check_app.command()
@@ -85,10 +83,7 @@ def anomalies(
         ohlcv check anomalies BTC/USDT -e binance
     """
     logger.info("Checking anomalies for {} ({}/{})", symbol, exchange, timeframe)
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        writer = QuestDBWriter(state.cfg.database)
-        repo = OHLCVRepository(writer, reader)
+    with open_repo() as repo:
         service = IntegrityService(repo)
 
         try:
@@ -114,8 +109,6 @@ def anomalies(
         out.print(table)
         out.print(f"\nTotal: {len(anomalies_found)} anomalies found")
         logger.info("Found {} anomalies", len(anomalies_found))
-    finally:
-        reader.close()
 
 
 @check_app.command()
@@ -126,10 +119,7 @@ def health() -> None:
         ohlcv check health
     """
     logger.info("Running health check")
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        writer = QuestDBWriter(state.cfg.database)
-        repo = OHLCVRepository(writer, reader)
+    with open_repo() as repo:
         service = IntegrityService(repo)
 
         try:
@@ -151,5 +141,3 @@ def health() -> None:
             for err in report.errors:
                 out.print(f"  Error: {err}")
             raise typer.Exit(code=1)
-    finally:
-        reader.close()

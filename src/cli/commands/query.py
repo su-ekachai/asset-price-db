@@ -7,10 +7,8 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from src.cli.state import state
-from src.db.connection import QuestDBReader, QuestDBWriter
-from src.db.repository import OHLCVRepository
-from src.exceptions import ConfigurationError, DatabaseError
+from src.cli.deps import open_repo
+from src.exceptions import ConfigurationError
 from src.export import export_dataframe
 
 console = Console(stderr=True)
@@ -74,16 +72,7 @@ def query(
         ohlcv query --list
         ohlcv query AAPL -e yahoo -t 1d --format json -o data.json
     """
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        try:
-            writer = QuestDBWriter(state.cfg.database)
-            repo = OHLCVRepository(writer, reader)
-        except DatabaseError as e:
-            console.print(f"[bold red]Error:[/bold red] {e}")
-            console.print("[dim]Hint: Verify QuestDB is running with 'ohlcv check health'[/dim]")
-            raise typer.Exit(code=1) from None
-
+    with open_repo() as repo:
         if list_mode:
             logger.info("Listing stored symbols")
             df = repo.get_symbols()
@@ -155,5 +144,3 @@ def query(
         logger.info("Exported {} rows as {}", len(df), fmt.value)
         if output:
             Console().print(f"Exported {len(df):,} rows to {output}")
-    finally:
-        reader.close()

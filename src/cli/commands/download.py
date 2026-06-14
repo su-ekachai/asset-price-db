@@ -12,9 +12,8 @@ from rich.progress import (
     TextColumn,
 )
 
+from src.cli.deps import open_repo
 from src.cli.state import state
-from src.db.connection import QuestDBReader, QuestDBWriter
-from src.db.repository import OHLCVRepository
 from src.exceptions import DatabaseError, DownloadError
 from src.services.downloader import DownloadService
 from src.sources.registry import create_source
@@ -80,10 +79,7 @@ def download(
         if not source.validate_symbol(symbol):
             raise typer.BadParameter(f"Symbol '{symbol}' is not valid for {exchange}.")
 
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        writer = QuestDBWriter(state.cfg.database)
-        repo = OHLCVRepository(writer, reader)
+    with open_repo() as repo:
         service = DownloadService(repo, {exchange: source})
 
         try:
@@ -105,6 +101,7 @@ def download(
             raise typer.Exit(code=1)
 
         total_rows = 0
+        failed: list[str] = []
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -122,13 +119,17 @@ def download(
                     logger.info("Downloaded {} rows for {}", rows, symbol)
                 except (DownloadError, DatabaseError) as e:
                     logger.error("Download failed for {}: {}", symbol, e)
-                    if len(symbols) == 1:
-                        console.print(f"[bold red]Error:[/bold red] {e}")
-                        raise typer.Exit(code=1) from None
+                    failed.append(symbol)
+                    console.print(f"[bold red]Error:[/bold red] {symbol}: {e}")
                 progress.advance(task)
+
+        if failed:
+            console.print(
+                f"[bold red]Error:[/bold red] {len(failed)} of {len(symbols)} "
+                f"symbol(s) failed: {', '.join(failed)}"
+            )
+            raise typer.Exit(code=1)
 
         Console().print(
             f"[green]Done:[/green] Downloaded {total_rows:,} rows for {len(symbols)} symbol(s)"
         )
-    finally:
-        reader.close()

@@ -12,12 +12,11 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from src.cli.deps import open_repo
 from src.cli.state import state
-from src.db.connection import QuestDBReader, QuestDBWriter
-from src.db.repository import OHLCVRepository
 from src.exceptions import ConfigurationError
 from src.services.sync import SyncResult, SyncService
-from src.watchlist import load_watchlist
+from src.watchlist import WatchlistEntry, load_watchlist
 
 console = Console(stderr=True)
 
@@ -80,18 +79,14 @@ def sync(
     else:
         entries = wl.symbols
 
-    reader = QuestDBReader(state.cfg.database)
-    try:
-        writer = QuestDBWriter(state.cfg.database)
-        repo = OHLCVRepository(writer, reader)
-
+    with open_repo() as repo:
         service = SyncService(repo, rate_limit_pause=state.cfg.download.rate_limit_pause)
 
-        results: list[SyncResult] = []
+        # sync_all is the single orchestration path: it holds the exclusive lock
+        # that prevents overlapping cron runs from interleaving.
+        results: list[SyncResult]
         if quiet:
-            for entry in entries:
-                result = service.sync_symbol(entry, dry_run=dry_run)
-                results.append(result)
+            results = service.sync_all(entries, dry_run=dry_run)
         else:
             with Progress(
                 SpinnerColumn(),
@@ -101,11 +96,12 @@ def sync(
                 console=Console(stderr=True),
             ) as progress:
                 task = progress.add_task("Syncing...", total=len(entries))
-                for entry in entries:
-                    progress.update(task, description=f"Syncing {entry.symbol}...")
-                    result = service.sync_symbol(entry, dry_run=dry_run)
-                    results.append(result)
+
+                def _advance(entry: WatchlistEntry, _result: SyncResult) -> None:
+                    progress.update(task, description=f"Synced {entry.symbol}")
                     progress.advance(task)
+
+                results = service.sync_all(entries, dry_run=dry_run, on_result=_advance)
 
         failed = [r for r in results if r.status == "failed"]
         synced = [r for r in results if r.status == "synced"]
@@ -155,5 +151,3 @@ def sync(
                 for r in failed:
                     logger.error("{}: {}", r.symbol, r.message)
             raise typer.Exit(code=1)
-    finally:
-        reader.close()
