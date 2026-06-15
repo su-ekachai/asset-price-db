@@ -138,24 +138,9 @@ class IntegrityService:
                     )
                 )
 
-        # Duplicates indicate source-side bugs or ingestion retries without dedup
-        timestamps = df["timestamp"]
-        duplicates = df[timestamps.duplicated(keep=False)]
-        seen_ts = set()
-        for _, row in duplicates.iterrows():
-            ts = pd.Timestamp(row["timestamp"])
-            if ts not in seen_ts:
-                seen_ts.add(ts)
-                ts_dt = ts.to_pydatetime()
-                assert isinstance(ts_dt, datetime)
-                anomalies.append(
-                    Anomaly(
-                        timestamp=ts_dt,
-                        anomaly_type="duplicate",
-                        details="Duplicate timestamp detected",
-                    )
-                )
-
+        # No duplicate-timestamp check: the ohlcv table has DEDUP UPSERT KEYS on
+        # (timestamp, symbol, exchange, timeframe) and get_candles filters a single
+        # series, so duplicates cannot reach storage. Re-add only if DEDUP is disabled.
         return anomalies
 
     def check_health(self) -> HealthReport:

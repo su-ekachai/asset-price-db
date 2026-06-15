@@ -39,26 +39,22 @@ class QuestDBWriter:
     def insert_dataframe(
         self, df: pd.DataFrame, table_name: str, symbols: list[str], at: str
     ) -> None:
-        """Write a pandas DataFrame as a batch of ILP rows."""
+        """Write a pandas DataFrame as ILP rows. Requires an active batch() context."""
+        if self._sender is None:
+            raise DatabaseError("insert_dataframe must be called within batch()")
         try:
-            if self._sender:
-                self._sender.dataframe(df, table_name=table_name, symbols=symbols, at=at)
-            else:
-                with Sender.from_conf(self._conf) as sender:
-                    sender.dataframe(df, table_name=table_name, symbols=symbols, at=at)
+            self._sender.dataframe(df, table_name=table_name, symbols=symbols, at=at)
         except IngressError as e:
             raise DatabaseError(f"DataFrame insert failed: {e}") from e
 
     def insert_row(
         self, table_name: str, symbols: dict[str, str], columns: JSONDict, at: datetime
     ) -> None:
-        """Write a single row via ILP."""
+        """Write a single row via ILP. Requires an active batch() context."""
+        if self._sender is None:
+            raise DatabaseError("insert_row must be called within batch()")
         try:
-            if self._sender:
-                self._sender.row(table_name, symbols=symbols, columns=columns, at=at)
-            else:
-                with Sender.from_conf(self._conf) as sender:
-                    sender.row(table_name, symbols=symbols, columns=columns, at=at)
+            self._sender.row(table_name, symbols=symbols, columns=columns, at=at)
         except IngressError as e:
             raise DatabaseError(f"Row insert failed: {e}") from e
 

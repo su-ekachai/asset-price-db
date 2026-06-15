@@ -14,16 +14,13 @@ database:
   user: testuser
   password: testpassword
 download:
-  default_exchange: yahoo
-  default_timeframe: 1d
-  chunk_size: 500
   rate_limit_pause: 1.0
     """)
     config = load_config(str(config_file))
     assert isinstance(config, AppConfig)
     assert config.database.host == "testhost"
     assert config.database.ilp_port == 9001
-    assert config.download.default_exchange == "yahoo"
+    assert config.download.rate_limit_pause == 1.0
 
 
 def test_load_config_missing_file():

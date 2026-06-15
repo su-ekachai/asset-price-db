@@ -13,12 +13,6 @@ from src.utils import retry
 
 YAHOO_TIMEFRAMES = ["1d", "1wk", "1mo"]
 
-YFINANCE_INTERVAL_MAP = {
-    "1d": "1d",
-    "1wk": "1wk",
-    "1mo": "1mo",
-}
-
 # Yahoo symbols: stocks (AAPL), class shares (BRK-B), indices (^GSPC),
 # forex/futures (EURUSD=X, GC=F), crypto (BTC-USD), foreign listings (7203.T)
 _SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9.^=\-]+$")
@@ -61,13 +55,13 @@ class YahooSource(DataSource):
     @override
     def download(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame:
         """Fetch OHLCV data from Yahoo Finance for the given symbol and date range."""
-        if timeframe not in YFINANCE_INTERVAL_MAP:
+        if timeframe not in YAHOO_TIMEFRAMES:
             available = ", ".join(YAHOO_TIMEFRAMES)
             raise DownloadError(
                 f"Yahoo source does not support timeframe '{timeframe}' — available: {available}"
             )
 
-        interval = YFINANCE_INTERVAL_MAP[timeframe]
+        interval = timeframe
 
         logger.info(
             "Downloading {} {} via yfinance ({} to {})",

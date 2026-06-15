@@ -180,28 +180,6 @@ def test_find_gaps_unknown_timeframe():
     assert gaps == []
 
 
-def test_find_anomalies_duplicates():
-    mock_repo = MagicMock()
-    mock_repo.get_candles.return_value = pd.DataFrame(
-        {
-            "timestamp": pd.to_datetime(
-                ["2024-01-01 00:00", "2024-01-01 00:00", "2024-01-01 00:01"], utc=True
-            ),
-            "open": [100, 100, 101],
-            "high": [101, 101, 102],
-            "low": [99, 99, 100],
-            "close": [100, 100, 101],
-            "volume": [10, 10, 11],
-        }
-    )
-
-    service = IntegrityService(mock_repo)
-    anomalies = service.find_anomalies("BTC/USDT", "binance", "1m")
-
-    types = [a.anomaly_type for a in anomalies]
-    assert "duplicate" in types
-
-
 def test_check_health_symbol_query_fails():
     mock_repo = MagicMock()
     mock_repo.count_candles.return_value = 500
