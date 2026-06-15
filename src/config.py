@@ -23,9 +23,6 @@ class DatabaseConfig:
 class DownloadConfig:
     """Default parameters for download operations."""
 
-    default_exchange: str = "binance"
-    default_timeframe: str = "1m"
-    chunk_size: int = 1000
     rate_limit_pause: float = 0.5
 
 

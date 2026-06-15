@@ -33,7 +33,8 @@ def test_writer_insert_dataframe(mocker):
     writer = QuestDBWriter(config)
 
     df = pd.DataFrame({"A": [1]})
-    writer.insert_dataframe(df, "test", ["symbol"], "timestamp")
+    with writer.batch():
+        writer.insert_dataframe(df, "test", ["symbol"], "timestamp")
 
     mock_sender_instance.dataframe.assert_called_once_with(
         df, table_name="test", symbols=["symbol"], at="timestamp"
@@ -205,39 +206,6 @@ def test_writer_batch_ingress_error(mocker):
         pass
 
 
-def test_writer_insert_dataframe_standalone(mocker):
-    mock_sender = mocker.patch("src.db.connection.Sender")
-    mock_sender_instance = MagicMock()
-    mock_sender.from_conf.return_value.__enter__ = MagicMock(return_value=mock_sender_instance)
-    mock_sender.from_conf.return_value.__exit__ = MagicMock(return_value=False)
-
-    config = DatabaseConfig()
-    writer = QuestDBWriter(config)
-
-    import pandas as pd
-
-    df = pd.DataFrame({"A": [1]})
-    writer.insert_dataframe(df, "test", ["symbol"], "timestamp")
-
-    mock_sender_instance.dataframe.assert_called_once()
-
-
-def test_writer_insert_row_standalone(mocker):
-    mock_sender = mocker.patch("src.db.connection.Sender")
-    mock_sender_instance = MagicMock()
-    mock_sender.from_conf.return_value.__enter__ = MagicMock(return_value=mock_sender_instance)
-    mock_sender.from_conf.return_value.__exit__ = MagicMock(return_value=False)
-
-    config = DatabaseConfig()
-    writer = QuestDBWriter(config)
-
-    from datetime import UTC, datetime
-
-    writer.insert_row("test", {"symbol": "BTC"}, {"price": 100}, datetime.now(UTC))
-
-    mock_sender_instance.row.assert_called_once()
-
-
 def test_writer_insert_dataframe_ingress_error(mocker):
     mock_sender = mocker.patch("src.db.connection.Sender")
     from questdb.ingress import IngressError
@@ -252,7 +220,7 @@ def test_writer_insert_dataframe_ingress_error(mocker):
 
     import pandas as pd
 
-    with pytest.raises(DatabaseError, match="DataFrame insert failed"):
+    with pytest.raises(DatabaseError, match="DataFrame insert failed"), writer.batch():
         writer.insert_dataframe(pd.DataFrame({"A": [1]}), "test", ["s"], "ts")
 
 
@@ -270,8 +238,22 @@ def test_writer_insert_row_ingress_error(mocker):
 
     from datetime import UTC, datetime
 
-    with pytest.raises(DatabaseError, match="Row insert failed"):
+    with pytest.raises(DatabaseError, match="Row insert failed"), writer.batch():
         writer.insert_row("test", {"sym": "X"}, {"v": 1}, datetime.now(UTC))
+
+
+def test_writer_insert_requires_batch(mocker):
+    mocker.patch("src.db.connection.Sender")
+    writer = QuestDBWriter(DatabaseConfig())
+
+    from datetime import UTC, datetime
+
+    import pandas as pd
+
+    with pytest.raises(DatabaseError, match="must be called within batch"):
+        writer.insert_dataframe(pd.DataFrame({"A": [1]}), "t", ["s"], "ts")
+    with pytest.raises(DatabaseError, match="must be called within batch"):
+        writer.insert_row("t", {"s": "X"}, {"v": 1}, datetime.now(UTC))
 
 
 def test_reader_query_df(mocker):
