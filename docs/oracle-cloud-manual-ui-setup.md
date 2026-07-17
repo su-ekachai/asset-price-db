@@ -31,8 +31,8 @@ Here, we select the most secure, lightweight Always Free ARM architecture.
    - Select the **Ampere** shape series.
    - Choose the `VM.Standard.A1.Flex` shape. Check that it has the "Always Free Eligible" tag.
    - Scroll down to **Shape configuration**:
-     - **Number of OCPUs**: Slide to `4`.
-     - **Amount of Memory (GB)**: Slide to `24`.
+     - **Number of OCPUs**: Slide to `2` (free limit since June 2026).
+     - **Amount of Memory (GB)**: Slide to `12` (free limit since June 2026).
    - Click **Select Shape**.
 
 ### 1.4. Networking Setup
