@@ -5,14 +5,14 @@ description = "OHLCV market data store using QuestDB"
 requires-python = ">=3.12"
 dependencies = [
     "questdb>=4.1.0",
-    "psycopg[binary]>=3.3.3",
-    "pandas>=3.0.0",
-    "ccxt>=4.5.50",
-    "yfinance>=0.2.40",
-    "typer>=0.15",
+    "psycopg[binary]>=3.3.4",
+    "pandas>=3.0.3",
+    "ccxt>=4.5.65",
+    "yfinance>=1.5.1",
+    "typer>=0.26",
     "loguru>=0.7",
     "pyyaml>=6.0",
-    "pyarrow>=24.0.0",
+    "pyarrow>=25.0.0",
 ]
 
 [project.scripts]
