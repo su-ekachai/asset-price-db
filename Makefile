@@ -1,4 +1,8 @@
-.PHONY: help dev test lint format typecheck build up down logs health sync status
+.PHONY: help dev test lint format typecheck build up down logs health sync status deploy db-init
+
+# VM SSH target over Tailscale. Override if your host/user differ:
+#   make deploy VM=ubuntu@100.117.237.69
+VM ?= ubuntu@ohlcv-prod-db
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -39,3 +43,9 @@ sync: ## Run manual sync
 
 status: ## Show data status
 	docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py status
+
+deploy: ## Pull the latest image on the VM and restart the stack (over Tailscale)
+	ssh $(VM) 'cd ~/asset-price-db && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'
+
+db-init: ## Initialize the QuestDB schema on the VM
+	ssh $(VM) 'cd ~/asset-price-db && docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py db init'
