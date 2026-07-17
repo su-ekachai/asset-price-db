@@ -46,7 +46,43 @@ class SyncService:
         """Sync a single symbol to present and return the outcome as SyncResult."""
         start_time = time.time()
 
-        source = self._get_source(entry.exchange)
+        # Validate before touching the network, mirroring the download command:
+        # a bad watchlist entry must fail its own SyncResult, not abort the batch
+        # or hit the exchange API every sync cycle.
+        try:
+            source = self._get_source(entry.exchange)
+        except DownloadError as e:
+            return SyncResult(
+                symbol=entry.symbol,
+                exchange=entry.exchange,
+                timeframe=entry.timeframe,
+                rows_inserted=0,
+                status="failed",
+                duration=time.time() - start_time,
+                message=str(e),
+            )
+
+        if entry.timeframe not in source.supported_timeframes():
+            return SyncResult(
+                symbol=entry.symbol,
+                exchange=entry.exchange,
+                timeframe=entry.timeframe,
+                rows_inserted=0,
+                status="failed",
+                duration=time.time() - start_time,
+                message=f"Timeframe '{entry.timeframe}' not supported by {entry.exchange}",
+            )
+
+        if not source.validate_symbol(entry.symbol):
+            return SyncResult(
+                symbol=entry.symbol,
+                exchange=entry.exchange,
+                timeframe=entry.timeframe,
+                rows_inserted=0,
+                status="failed",
+                duration=time.time() - start_time,
+                message=f"Symbol '{entry.symbol}' is not valid for {entry.exchange}",
+            )
 
         last_ts = self._repository.get_last_timestamp(entry.symbol, entry.exchange, entry.timeframe)
 
