@@ -8,31 +8,63 @@ services:
       - "127.0.0.1:9009:9009"  # ILP over TCP
     environment:
       - QDB_TELEMETRY_ENABLED=false
+      # PG wire credentials from .env — QUESTDB_PASSWORD is required so the
+      # default admin/quest pair can never reach production.
+      # ponytail: ILP-over-HTTP (port 9000) stays unauthenticated in QuestDB OSS —
+      # acceptable only because access is Tailscale/firewall-gated; never expose publicly.
+      - QDB_PG_USER=${QUESTDB_USER:-admin}
+      - QDB_PG_PASSWORD=${QUESTDB_PASSWORD:?set a non-default password in .env}
     volumes:
       - questdb-data:/var/lib/questdb
     mem_limit: 1g
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # ponytail: no healthcheck. The questdb/questdb image (fedora-minimal) ships
+    # neither curl nor wget (github.com/questdb/questdb/issues/2873, still open),
+    # so an in-image HTTP probe can't run. The scheduler's sync loop already
+    # retries a not-yet-ready DB, so readiness gating isn't needed here.
 
   scheduler:
-    build: .
+    # Pull the prebuilt arm64 image published by .github/workflows/deploy.yml on
+    # each v* tag. Pin APP_TAG=<version> in .env to roll back; unset = newest.
+    image: ghcr.io/su-ekachai/asset-price-db:${APP_TAG:-latest}
     restart: unless-stopped
     depends_on:
-      questdb:
-        condition: service_healthy
+      - questdb  # start-ordering only; the sync loop retries until the DB is ready
     env_file: .env
+    environment:
+      # Reach QuestDB by service name — infra fact, not a tunable. Overrides the
+      # app's localhost default so the scheduler never dials itself, regardless of .env.
+      - QUESTDB_HOST=questdb
+    volumes:
+      # Watchlist is config, not code — mount it so it can change without a rebuild.
+      - ./symbols.yaml:/app/symbols.yaml:ro
     mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         echo "Scheduler starting - sync interval: $${SYNC_INTERVAL:-300}s"
         while true; do
           echo "$(date -Iseconds) Running sync..."
-          uv run python main.py sync --quiet || echo "$(date -Iseconds) sync FAILED rc=$?"
+          if uv run python main.py sync --quiet; then
+            # Dead-man switch: ping healthchecks.io only on success — a stalled
+            # or failing scheduler stops pinging and triggers an email alert.
+            if [ -n "$${HEALTHCHECK_URL:-}" ]; then
+              # stdlib ping — the app image (python:3.12-slim) ships python, not curl.
+              python -c "import os,urllib.request; urllib.request.urlopen(os.environ['HEALTHCHECK_URL'], timeout=10)" \
+                || echo "$(date -Iseconds) healthcheck ping failed"
+            fi
+          else
+            echo "$(date -Iseconds) sync FAILED rc=$?"
+          fi
           sleep $${SYNC_INTERVAL:-300}
         done
 

@@ -36,6 +36,21 @@ class OHLCVRepository:
 
         if "timestamp" in df.columns:
             ts = pd.to_datetime(df["timestamp"], utc=True)
+            # Guard both write paths (download and sync): future timestamps are
+            # clock skew or bad source data — drop them, keep the valid rows.
+            future = ts > pd.Timestamp.now("UTC")
+            if future.any():
+                logger.warning(
+                    "Dropping {} candles with future timestamps: {}/{}/{}",
+                    int(future.sum()),
+                    symbol,
+                    exchange,
+                    timeframe,
+                )
+                df = df.loc[~future]
+                ts = ts.loc[~future]
+                if df.empty:
+                    return 0
             df["timestamp"] = ts.dt.tz_localize(None).dt.as_unit("us")
 
         df["symbol"] = symbol

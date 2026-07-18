@@ -11,8 +11,8 @@ Oracle Cloud Always Free Tier offers generous ARM resources (Ampere A1 Flex shap
 
 - **Name**: `ohlcv-db-node-1`
 - **Shape**: `VM.Standard.A1.Flex`
-- **OCPUs**: 4 Cores
-- **Memory**: 24 GB RAM (Total free limit)
+- **OCPUs**: 2 Cores (free limit reduced from 4 in June 2026)
+- **Memory**: 12 GB RAM (Total free limit; was 24 GB before June 2026)
 - **Boot Volume**: 50 GB - 200 GB (Balanced Performance)
 - **Image**: `Canonical Ubuntu 24.04 Minimal aarch64` (Recommended for database stability, low overhead, and high security)
 
@@ -63,27 +63,70 @@ sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 ```
 
-### 3.2. Secure Docker Configuration
-Modify your `docker-compose.yml` to ensure QuestDB only listens on the **Tailscale interface**. This is a critical security step.
+### 3.2. Prepare the deploy directory
 
-Update the `ports` section for QuestDB:
-```yaml
-services:
-  questdb:
-    image: questdb/questdb:latest
-    ports:
-      # Bind to Tailscale IP ONLY (replace 100.x.x.x with your VM's Tailscale IP)
-      - "100.x.x.x:9000:9000" # HTTP (ILP + Web Console)
-      - "100.x.x.x:8812:8812" # PG wire protocol
-    volumes:
-      - questdb_data:/var/lib/questdb
-    restart: unless-stopped
-```
+The production stack (`docker-compose.prod.yml`) runs two services: **QuestDB**, and a **scheduler** that loops `ohlcv sync` every `SYNC_INTERVAL` seconds and pings a healthchecks.io dead-man URL on each success. The scheduler runs a **prebuilt ARM64 image pulled from GitHub Container Registry (GHCR)** — it is *not* built on the VM. The image carries the code, so the VM only needs three config files.
 
-Deploy the stack:
 ```bash
-docker compose up -d
+mkdir -p ~/asset-price-db
 ```
+From your Mac (over Tailscale), copy the compose file and your watchlist:
+```bash
+scp docker-compose.prod.yml symbols.yaml ohlcv-prod-db:~/asset-price-db/
+```
+`symbols.yaml` is your watchlist — copy `symbols.yaml.example` to `symbols.yaml` and customize it first. It is mounted **read-only** into the scheduler, so you can edit it on the VM and re-run `docker compose up -d` without rebuilding the image.
+
+### 3.3. Environment file (`.env`)
+
+Create `~/asset-price-db/.env` on the VM (never commit it). Variables the prod stack consumes:
+
+| Variable | Required | Example | Purpose |
+|---|---|---|---|
+| `QUESTDB_PASSWORD` | **yes** | `<strong-random>` | PG-wire password; compose refuses to start on the default `quest`. |
+| `HEALTHCHECK_URL` | recommended | `https://hc-ping.com/<uuid>` | Dead-man switch — pinged only after a **successful** sync; silence triggers an alert. |
+| `SYNC_INTERVAL` | no (default `300`) | `300` | Seconds between sync runs. |
+| `QUESTDB_USER` | no (default `admin`) | `admin` | PG-wire user. |
+| `OHLCV_LOG_FORMAT` | no (default `text`) | `json` | Set `json` for structured logs. |
+| `OHLCV_LOG_FILE` | no | `/app/logs/ohlcv.log` | In-container log path (ephemeral unless a volume is added). |
+| `APP_TAG` | no (default `latest`) | `1.0.0` | Pin a released image version — used to roll back. |
+
+### 3.4. Publish the image (CI) and make it pullable
+
+`.github/workflows/deploy.yml` publishes the image on every `v*` tag:
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+This builds a `linux/arm64` image on a native ARM runner and pushes it to `ghcr.io/su-ekachai/asset-price-db` (tagged with the version and `latest`).
+
+**One-time:** make the GHCR package **public** so the VM pulls without a token — GitHub → repo → **Packages** → `asset-price-db` → **Package settings** → **Change visibility** → **Public**. *(Alternatively keep it private and run `docker login ghcr.io` on the VM with a `read:packages` token.)*
+
+### 3.5. First deploy (bootstrap)
+
+On the VM, bring the stack up (pulls QuestDB + the scheduler image), then initialize the schema and run a first sync:
+```bash
+cd ~/asset-price-db
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py db init
+docker compose -f docker-compose.prod.yml exec scheduler uv run python main.py sync -v
+```
+> QuestDB takes a few seconds to accept connections after `up -d`. If `db init` errors with a connection failure, wait ~10s and re-run it — the stack does not gate on a DB healthcheck (the questdb image ships no HTTP client), so the commands are safe to retry.
+Verify both services are healthy and sync succeeds:
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f scheduler
+```
+QuestDB binds to `127.0.0.1` only. To reach the web console from your Mac, tunnel it over Tailscale SSH:
+```bash
+ssh -L 9000:localhost:9000 ohlcv-prod-db   # then open http://localhost:9000
+```
+
+### 3.6. Deploying updates
+
+From your Mac, after pushing a new `v*` tag and letting the Deploy workflow finish:
+```bash
+make deploy      # ssh ohlcv-prod-db → docker compose pull && up -d
+```
+**Rollback:** set `APP_TAG=<older-version>` in the VM's `.env`, then `make deploy`.
 
 ---
 

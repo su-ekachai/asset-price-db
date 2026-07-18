@@ -6,7 +6,9 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # Native arm64 runner (free for public repos) — the Oracle VM is arm64, so
+    # this avoids QEMU emulation. Fallback: ubuntu-latest + docker/setup-qemu-action@v3.
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -30,10 +32,14 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          platforms: linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

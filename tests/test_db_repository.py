@@ -42,6 +42,43 @@ class TestInsertCandles:
         ts = kwargs["df"]["timestamp"].iloc[0]
         assert ts.tzinfo is None
 
+    def test_drops_future_timestamps_keeps_valid_rows(self, mock_repo):
+        future = pd.Timestamp.now("UTC") + pd.Timedelta(days=10)
+        df = pd.DataFrame(
+            {
+                "timestamp": [pd.Timestamp("2024-01-01", tz="UTC"), future],
+                "open": [100.0, 200.0],
+                "high": [105.0, 205.0],
+                "low": [95.0, 195.0],
+                "close": [102.0, 202.0],
+                "volume": [10.0, 20.0],
+            }
+        )
+
+        rows = mock_repo.insert_candles(df, "BTC/USDT", "binance", "1m")
+
+        assert rows == 1
+        _, kwargs = mock_repo._writer.insert_dataframe.call_args
+        assert len(kwargs["df"]) == 1
+
+    def test_all_future_timestamps_returns_zero(self, mock_repo):
+        future = pd.Timestamp.now("UTC") + pd.Timedelta(days=10)
+        df = pd.DataFrame(
+            {
+                "timestamp": [future],
+                "open": [100.0],
+                "high": [105.0],
+                "low": [95.0],
+                "close": [102.0],
+                "volume": [10.0],
+            }
+        )
+
+        rows = mock_repo.insert_candles(df, "BTC/USDT", "binance", "1m")
+
+        assert rows == 0
+        mock_repo._writer.insert_dataframe.assert_not_called()
+
 
 class TestLogDownload:
     def test_logs_download_metadata(self, mock_repo):

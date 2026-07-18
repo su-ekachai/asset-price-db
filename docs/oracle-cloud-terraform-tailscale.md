@@ -157,8 +157,8 @@ resource "oci_core_instance" "ohlcv_db_node_1" {
   display_name        = "ohlcv-db-node-1"
 
   shape_config {
-    ocpus         = 4 # Free limit
-    memory_in_gbs = 24 # Free limit
+    ocpus         = 2  # Free limit (reduced from 4 in June 2026)
+    memory_in_gbs = 12 # Free limit (reduced from 24 in June 2026)
   }
 
   create_vnic_details {

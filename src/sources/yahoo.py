@@ -17,10 +17,6 @@ YAHOO_TIMEFRAMES = ["1d", "1wk", "1mo"]
 # forex/futures (EURUSD=X, GC=F), crypto (BTC-USD), foreign listings (7203.T)
 _SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9.^=\-]+$")
 
-# Yahoo symbols: stocks (AAPL), class shares (BRK-B), indices (^GSPC),
-# forex/futures (EURUSD=X, GC=F), crypto (BTC-USD), foreign listings (7203.T)
-_SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9.^=\-]+$")
-
 
 class YahooSource(DataSource):
     """Data source for traditional markets (stocks, forex, commodities) via yfinance."""
