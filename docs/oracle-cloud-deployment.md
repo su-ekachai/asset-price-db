@@ -88,13 +88,13 @@ Create `~/asset-price-db/.env` on the VM (never commit it). Variables the prod s
 | `QUESTDB_USER` | no (default `admin`) | `admin` | PG-wire user. |
 | `OHLCV_LOG_FORMAT` | no (default `text`) | `json` | Set `json` for structured logs. |
 | `OHLCV_LOG_FILE` | no | `/app/logs/ohlcv.log` | In-container log path (ephemeral unless a volume is added). |
-| `APP_TAG` | no (default `latest`) | `0.1.0` | Pin a released image version — used to roll back. |
+| `APP_TAG` | no (default `latest`) | `1.0.0` | Pin a released image version — used to roll back. |
 
 ### 3.4. Publish the image (CI) and make it pullable
 
 `.github/workflows/deploy.yml` publishes the image on every `v*` tag:
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v1.0.0 && git push origin v1.0.0
 ```
 This builds a `linux/arm64` image on a native ARM runner and pushes it to `ghcr.io/su-ekachai/asset-price-db` (tagged with the version and `latest`).
 

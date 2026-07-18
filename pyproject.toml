@@ -1,6 +1,6 @@
 [project]
 name = "ohlcv-data-store"
-version = "0.1.0"
+version = "1.0.0"
 description = "OHLCV market data store using QuestDB"
 requires-python = ">=3.12"
 dependencies = [

@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="Ekachai Suriyakriengkri" \
       description="OHLCV market data store using QuestDB" \
-      version="0.1.0"
+      version="1.0.0"
 
 WORKDIR /app
 
