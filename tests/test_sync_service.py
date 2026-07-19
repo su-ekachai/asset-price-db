@@ -84,7 +84,8 @@ def test_sync_symbol_resumes_at_last_timestamp(mocker):
     result = service.sync_symbol(_make_entry())
 
     assert result.status == "synced"
-    download_start = mock_source.download.call_args[0][2]
+    # Resume starts the FIRST download window AT last_ts (later windows page forward).
+    download_start = mock_source.download.call_args_list[0][0][2]
     assert download_start == last_ts
 
 
@@ -219,6 +220,50 @@ def test_sync_all_bad_entry_does_not_abort_batch(mocker):
     results = service.sync_all(entries)
 
     assert [r.status for r in results] == ["failed", "synced"]
+
+
+def test_sync_symbol_backfill_checkpoints_per_window(mocker):
+    """A deep backfill spans multiple windows and commits each. If a later window
+    fails, prior windows stay committed (resumable) and the windows are contiguous
+    (no gap), so no candles are lost or skipped."""
+    from src.exceptions import DownloadError
+
+    mock_repo = MagicMock()
+    mock_repo.get_last_timestamp.return_value = None
+    mock_repo.insert_candles.return_value = 1000
+    mock_repo.batch.return_value.__enter__ = MagicMock()
+    mock_repo.batch.return_value.__exit__ = MagicMock(return_value=False)
+
+    page = pd.DataFrame(
+        {
+            "timestamp": [pd.Timestamp("2020-01-01", tz="UTC")],
+            "open": [1.0],
+            "high": [1.0],
+            "low": [1.0],
+            "close": [1.0],
+            "volume": [1.0],
+        }
+    )
+    mock_source = _make_source()
+    # Window 1 returns data and commits; window 2 crashes mid-backfill.
+    mock_source.download.side_effect = [page, DownloadError("rate limited")]
+    mocker.patch("src.services.sync.create_source", return_value=mock_source)
+
+    service = SyncService(mock_repo)
+    # 2y lookback >> 90d window, so the range splits into multiple windows.
+    result = service.sync_symbol(_make_entry(lookback="2y"))
+
+    # Window 1 committed before the crash: partial progress survived, not zeroed.
+    assert mock_repo.insert_candles.call_count == 1
+    assert result.status == "failed"
+    assert result.rows_inserted == 1000
+
+    # Windows are contiguous: window 2 starts exactly where window 1 ended.
+    calls = mock_source.download.call_args_list
+    w1_start, w1_end = calls[0][0][2], calls[0][0][3]
+    w2_start = calls[1][0][2]
+    assert w1_end - w1_start == timedelta(days=90)
+    assert w2_start == w1_end
 
 
 def test_sync_all(mocker):
