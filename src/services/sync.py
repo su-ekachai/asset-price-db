@@ -13,6 +13,11 @@ from src.sources.base import DataSource
 from src.sources.registry import create_source
 from src.watchlist import WatchlistEntry, parse_lookback_days
 
+# Backfill windows: each commits independently so a crashed deep backfill resumes
+# from the last committed window via last_ts, and only ~90d of 1m candles (~130k
+# rows) are buffered at once. Widen to cut boundary requests; narrow to shrink RAM.
+_BACKFILL_WINDOW = timedelta(days=90)
+
 
 @dataclass(kw_only=True)
 class SyncResult:
@@ -119,10 +124,28 @@ class SyncService:
                 message=f"Would download from {start.strftime('%Y-%m-%d %H:%M')} to now",
             )
 
+        total = 0
         try:
-            df = source.download(entry.symbol, entry.timeframe, start, now)
+            # Download in windows and commit each before fetching the next, so a
+            # crash partway through a deep backfill keeps prior windows: last_ts
+            # advances and the next run resumes from there (see the resume branch
+            # above). Boundary candles overlap by design; insert_candles dedups.
+            cursor = start
+            while cursor < now:
+                win_end = min(cursor + _BACKFILL_WINDOW, now)
+                df = source.download(entry.symbol, entry.timeframe, cursor, win_end)
+                if not df.empty:
+                    with self._repository.batch():
+                        rows = self._repository.insert_candles(
+                            df, entry.symbol, entry.exchange, entry.timeframe
+                        )
+                        self._repository.log_download(
+                            entry.symbol, entry.exchange, entry.timeframe, cursor, win_end, rows
+                        )
+                    total += rows
+                cursor = win_end
 
-            if df.empty:
+            if total == 0:
                 return SyncResult(
                     symbol=entry.symbol,
                     exchange=entry.exchange,
@@ -133,19 +156,11 @@ class SyncService:
                     message="No new data available",
                 )
 
-            with self._repository.batch():
-                rows = self._repository.insert_candles(
-                    df, entry.symbol, entry.exchange, entry.timeframe
-                )
-                self._repository.log_download(
-                    entry.symbol, entry.exchange, entry.timeframe, start, now, rows
-                )
-
             return SyncResult(
                 symbol=entry.symbol,
                 exchange=entry.exchange,
                 timeframe=entry.timeframe,
-                rows_inserted=rows,
+                rows_inserted=total,
                 status="synced",
                 duration=time.time() - start_time,
             )
@@ -156,10 +171,10 @@ class SyncService:
                 symbol=entry.symbol,
                 exchange=entry.exchange,
                 timeframe=entry.timeframe,
-                rows_inserted=0,
+                rows_inserted=total,
                 status="failed",
                 duration=time.time() - start_time,
-                message=str(e),
+                message=f"{e} (committed {total} rows, re-run to resume)" if total else str(e),
             )
         except Exception as e:
             logger.opt(exception=True).error("Unexpected error syncing {}", entry.symbol)
@@ -167,7 +182,7 @@ class SyncService:
                 symbol=entry.symbol,
                 exchange=entry.exchange,
                 timeframe=entry.timeframe,
-                rows_inserted=0,
+                rows_inserted=total,
                 status="failed",
                 duration=time.time() - start_time,
                 message=f"Unexpected error: {e}",
